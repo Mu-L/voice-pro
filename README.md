@@ -77,11 +77,11 @@ Voice-Pro
 </p>
 
 Voice-Pro is a state-of-the-art web app that transforms multimedia content creation. It integrates YouTube video downloading, voice separation, speech recognition, translation, and text-to-speech into a single, powerful tool for creators, researchers, and multilingual professionals.
-- 🔊 Top-tier speech recognition: **Whisper**, **Faster-Whisper**, **Whisper-Timestamped**, **WhisperX**
-- 🎤 Zero-shot voice cloning: **F5-TTS**, **E2-TTS**, **CosyVoice**
-- 📢 Multilingual text-to-speech: **Edge-TTS**, **kokoro** (Paid version includes **Azure TTS**)
+- 🔊 Top-tier speech recognition: **Whisper**, **Faster-Whisper**, **Whisper-Timestamped**
+- 🎤 Zero-shot voice cloning: **F5-TTS**, **E2-TTS**, **CosyVoice** (incl. **Fun-CosyVoice3** — Korean and 8 more languages)
+- 📢 Multilingual text-to-speech: **Edge-TTS**, **kokoro** (optional **Azure TTS** with your own keys — see [Azure services](#-azure-services-optional-env))
 - 🎥 YouTube processing & audio extraction: **yt-dlp**
-- 🌍 Instant translation for 100+ languages: **Deep-Translator** (Paid version includes **Azure Translator**)
+- 🌍 Instant translation for 100+ languages: **Deep-Translator** (optional **Azure Translator** with your own keys)
 
 
 A robust alternative to **ElevenLabs**, Voice-Pro empowers podcasters, developers, and creators with advanced voice solutions.
@@ -91,12 +91,28 @@ A robust alternative to **ElevenLabs**, Voice-Pro empowers podcasters, developer
 - We have made all Voice-Pro code open source and completely free. Voice-Pro can now be freely distributed and modified by anyone.
 - It works well on Windows with NVIDIA GPU. Operation on Mac and Linux has not been verified.
 - Please leave your requests on the [![GitHub Issues](https://img.shields.io/github/issues/abus-aikorea/voice-pro)](https://github.com/abus-aikorea/voice-pro/issues)  or  [![GitHub Discussions](https://img.shields.io/github/discussions/abus-aikorea/voice-pro)](https://github.com/abus-aikorea/voice-pro/discussions) pages.
-- **Troubleshooting**: In most cases, issues can be resolved by deleting the `installer_files` folder and then running `configure.bat` followed by `start.bat`.
+- **Troubleshooting**: In most cases, issues can be resolved by deleting the `installer_files` folder and then running `start.bat` again (a clean reinstall takes only a few minutes; downloaded AI models in `model/` are kept). Errors are shown in the WebUI as red toasts that stay until closed.
 
 
 ## 📰 News & History
 
 <details open>
+<summary>version 4.0</summary>
+
+- ⚡ **Migrated the installer from Miniconda/pip to [uv](https://docs.astral.sh/uv/)** — dramatically faster, fully reproducible installs from a committed `uv.lock`. Everything stays inside `installer_files/` (uv, Python, packages).
+- 🐍 Upgraded runtime: **Python 3.12, Torch 2.8.0+cu128 (RTX 50-series supported), Gradio 6.20**.
+- 🎙️ Latest ASR stack: **faster-whisper 1.2.1** (large-v3-turbo, distil-large-v3.5), openai-whisper 20250625, whisper-timestamped 1.15.9. whisperX was removed (its dependency pins blocked the Gradio 6 upgrade; existing configs fall back to faster-whisper).
+- 🗣️ Latest TTS stack: **F5-TTS 1.1.21**, kokoro 0.9.4, edge-tts 7.x, and re-vendored **CosyVoice** (upstream main).
+- 🇰🇷 New optional TTS model: **Fun-CosyVoice3-0.5B** — 9 languages including Korean, selectable in the CosyVoice tab (downloads from the official HF repo on first use).
+- 🧹 CUDA Toolkit and Visual Studio Build Tools are **no longer required** — all dependencies ship prebuilt wheels, and PyTorch bundles the CUDA runtime.
+- 🛡️ Friendly to **restricted / corporate PCs**: no administrator rights needed — `start.bat` auto-downloads a portable **ffmpeg** if it is not installed, Whisper model downloads self-heal after interrupted/corrupted transfers, and translation automatically retries with backoff when the network rate-limits the free Google endpoint (failed lines are reported, originals kept).
+- 🚨 **Errors are now visible in the WebUI**: every failure shows a red error toast that stays on screen until you close it (previously a 10-second warning that was easy to miss), with actionable messages for common causes (missing ffmpeg, no media registered, etc.).
+- 🖥️ UI: migrated to **Gradio 6** (full-width layout for all tabs, subtitle tracks shown directly in the video players).
+- 🧽 `uninstall.bat` no longer requires administrator rights and no longer force-reboots; `uninstall.bat silent` runs unattended.
+
+</details>
+
+<details>
 <summary>version 3.2</summary>
 
 - We have been focusing on [WeConnect](https://www.wctokyoseoul.com) development for the past few months and have not been able to manage Voice-Pro at all. 
@@ -414,8 +430,8 @@ Japanese
 
 
 ## 💻 System Requirements
-- **OS:** Windows 10/11 (64-bit), Linux, Mac
-- **GPU:** NVIDIA with CUDA 12.4 (recommended)
+- **OS:** Windows 10/11 (64-bit), Linux, Mac (Apple Silicon)
+- **GPU:** NVIDIA GPU with a recent driver (>= 570 recommended; RTX 50-series supported). CUDA Toolkit installation is NOT required.
 - **VRAM:** 4GB+ (8GB+ preferred)
 - **RAM:** 4GB+
 - **Storage:** 20GB+ free space
@@ -437,20 +453,51 @@ git clone https://github.com/abus-aikorea/voice-pro.git
   
 
 ### 2. Install & Run
-1. 🚀 **configure.bat**
-   - Sets up git, ffmpeg, and CUDA (if NVIDIA GPU)
-   - Run once; takes 1+ hour with internet
-   - Don’t close the command window
+1. 🚀 **configure.bat** (optional)
+   - Sets up git and ffmpeg system-wide (CUDA Toolkit / Visual Studio are no longer needed)
+   - Requires administrator rights; run once
+   - No admin rights? Skip it — **start.bat** downloads a portable ffmpeg automatically
 2. 🚀 **start.bat**
    - Launches Voice-Pro WebUI
-   - First run installs dependencies (1+ hour)
+   - First run downloads uv + Python 3.12 and installs all dependencies from the lockfile (minutes, not hours), then downloads AI models (~10GB — this is the slow part)
+   - GPU/CPU is auto-detected; override with the `GPU_CHOICE` environment variable (`G`=NVIDIA, `C`=CPU) or by deleting `installer_files\gpu_choice.txt`
    - Retry after deleting **installer_files** if issues arise
 
 ### 3. Update
-- 🚀 **update.bat**: Refreshes Python environment (faster than reinstall)
+- 🚀 **update.bat**: Re-syncs the Python environment exactly to the committed lockfile (fast)
 
 ### 4. Uninstall
 - Run **uninstall.bat** or delete the folder (portable install)
+- No administrator rights required; add `silent` for unattended removal (`uninstall.bat silent`)
+- Only the `installer_files` folder is removed — your `model/` and `workspace/` folders are kept
+
+
+## 🔑 Azure services (optional, .env)
+
+By default Voice-Pro uses **free** services: Deep-Translator (Google's free web endpoint) for translation and Edge-TTS for speech synthesis. If you have your own **Microsoft Azure** subscription, you can switch both to the Azure APIs:
+
+1. Copy `.env.example` to `.env` in the project root:
+   ```bash
+   copy .env.example .env     # Windows
+   cp .env.example .env       # Mac/Linux
+   ```
+2. Fill in your Azure credentials:
+   ```ini
+   # Azure Speech Service (TTS)
+   AZURE_SPEECH_KEY=your_azure_speech_key_here
+   AZURE_SPEECH_REGION=eastus
+
+   # Azure Translator Service
+   AZURE_TRANSLATOR_KEY=your_azure_translator_key_here
+   AZURE_TRANSLATOR_ENDPOINT=https://your-translator-resource.cognitiveservices.azure.com/
+   AZURE_TRANSLATOR_REGION=eastus
+   ```
+3. Restart Voice-Pro. Valid keys are detected automatically at startup — translation switches to **Azure Translator** and the first Speech Generation tab becomes **Azure-TTS**.
+
+**When is this worth setting up?**
+- 🏢 **Corporate / restricted networks**: security appliances often rate-limit or block the free `translate.google.com` endpoint, which slows down or fails long subtitle translations. Voice-Pro retries with backoff and keeps the original text for failed lines (you will see a warning with the failure count), but Azure Translator avoids the problem entirely.
+- 🗣️ Higher-quality/consistent TTS voices and higher rate limits.
+- Do **NOT** commit `.env` to version control — it contains your private keys.
 
 
 ## ❓Tips & Tricks
