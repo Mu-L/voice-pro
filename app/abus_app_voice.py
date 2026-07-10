@@ -66,7 +66,9 @@ def create_ui(user_config: UserConfig):
     
     system = platform.system()    
 
-    with gr.Blocks(title='Voice-Pro', css=css, theme=ui.theme) as gradio_interface:
+    # gradio 6: css/theme moved from Blocks() to launch()
+    # fill_width=True: 모든 탭이 화면 전체 너비를 사용
+    with gr.Blocks(title='Voice-Pro', fill_width=True) as gradio_interface:
         gr.HTML(f'<center><h6>{i18n("")}</h6></center>')
         
         with gr.Tab(i18n("Dubbing Studio")):
@@ -116,12 +118,14 @@ def create_ui(user_config: UserConfig):
     if system == "Windows":
         gradio_interface.launch(
             share=False,
-            server_name=None, 
+            server_name=None,
             server_port=7870,
-            inbrowser=True
+            inbrowser=True,
+            css=css,
+            theme=ui.theme
         )
     elif system == "Linux" or system == "Darwin":  # Linux or macOS
-        gradio_interface.launch()
+        gradio_interface.launch(css=css, theme=ui.theme)
     else:
         print(f"Unsupported systems: {system}")
 

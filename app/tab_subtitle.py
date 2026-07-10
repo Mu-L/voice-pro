@@ -48,7 +48,7 @@ def subtitle_tab(user_config: UserConfig):
                 with gr.Column():
                     with gr.Group():
                         gr.HTML(f'<center><h4>{i18n("Subtitles")}</h4></center>')    
-                        source_srt = gr.Textbox(label=i18n("SRT"), interactive=True, show_label=True, max_lines=24, lines=15, show_copy_button=True)
+                        source_srt = gr.Textbox(label=i18n("SRT"), interactive=True, show_label=True, max_lines=24, lines=15, buttons=["copy"])
             subtitle_files = gr.File(label=i18n("Files"), type="filepath", file_count="multiple") 
             
             with gr.Row():

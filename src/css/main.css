@@ -67,6 +67,9 @@ ol li p, ul li p {
 }
 
 .gradio-container {
+    /* gradio 6: the container has margin:auto and shrinks to its content,
+       so the page width changed per tab. Force full width for every tab. */
+    width: 100% !important;
     max-width: 100% !important;
     padding-top: 0 !important;
 }

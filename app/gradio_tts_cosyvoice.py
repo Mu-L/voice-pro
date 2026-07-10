@@ -20,8 +20,13 @@ logger = structlog.get_logger()
 class GradioCosyVoice:
     def __init__(self, user_config: UserConfig):
         self.user_config = user_config
-        
-        self.tts = CosyVoiceInference()
+
+        self.tts = CosyVoiceInference(user_config.get("cosy_model", "CosyVoice2-0.5B"))
+
+
+    def gradio_change_model(self, model_name: str):
+        self.tts.set_model(model_name)
+        self.user_config.set("cosy_model", model_name)
 
 
             
@@ -57,7 +62,7 @@ class GradioCosyVoice:
             return dubbing_file, dubbing_file
         except Exception as e:
             logger.error(f"[gradio_tts_cosyvoice.py] gradio_tts_dubbing_single - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None            
 
    

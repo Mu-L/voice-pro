@@ -3,6 +3,12 @@ import os
 import sys
 from pathlib import Path
 
+# Windows에서 gradio -> torch -> pyarrow.dataset 순서로 DLL이 로드되면 네이티브 크래시가
+# 발생한다 (f5_tts가 datasets를 통해 pyarrow.dataset을 당김). torch와 pyarrow.dataset을
+# 먼저 로드해 DLL 해석 순서를 고정한다.
+import torch  # noqa: F401
+import pyarrow.dataset  # noqa: F401
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)

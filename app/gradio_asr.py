@@ -1,5 +1,7 @@
 
 
+import shutil
+
 from src.config import UserConfig
 
 from app.abus_downloader import *
@@ -11,7 +13,6 @@ from app.abus_files import *
 from app.abus_asr_faster_whisper import *
 from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
-from app.abus_asr_whisperx import *
 
 from src.i18n.i18n import I18nAuto
 i18n = I18nAuto()
@@ -36,9 +37,8 @@ class GradioASR:
         switch_dict = {
             'faster-whisper': lambda: FasterWhisperInference(),
             'whisper': lambda: WhisperInference(),
-            'whisper-timestamped': lambda: WhisperTimestampedInference(),
-            'whisperX': lambda: WhisperXInference()            
-        }
+            'whisper-timestamped': lambda: WhisperTimestampedInference()
+            }
         return switch_dict.get(case, lambda: FasterWhisperInference())()    
     
         
@@ -53,7 +53,7 @@ class GradioASR:
     #     cmd_open_explorer(self.mdxnet_models_dir)
         
     def get_asr_engines(self):
-        return ['faster-whisper', 'whisper', 'whisper-timestamped', 'whisperX']        
+        return ['faster-whisper', 'whisper', 'whisper-timestamped']        
     
     def update_whisper_models(self, asr_engine):
         whisper_inf = self.switch_case(asr_engine)       
@@ -83,15 +83,21 @@ class GradioASR:
 
         try:
             logger.debug(f'upload_source: file_obj={file_obj}, mic_file={mic_file}, youtube_url={youtube_url}')
+            # ffmpeg는 다운로드 병합/오디오 추출에 필수 — 없으면 즉시 명확한 안내
+            if shutil.which("ffmpeg") is None:
+                raise gr.Error(i18n("ffmpeg is not installed. Run configure.bat (or configure.sh) as administrator to install it."), duration=None)
+
             self.fm = FileManager()
             if self._upload(file_obj, mic_file, youtube_url, video_quality, audio_format) == False:
-                return None, None
+                raise gr.Error(i18n("Please provide a media file, a microphone recording, or a YouTube URL."), duration=None)
 
             return self.fm.get_split("Source.video"), self.fm.get_split("Source.audio")
+        except gr.Error:
+            raise
         except Exception as e:
             logger.error(f"[gradio_asr.py] upload_source - An error occurred: {e}")
-            gr.Warning(f'{e}')
-            return None, None
+            # duration=None: 사용자가 닫기 전까지 유지되는 오류 토스트 (자동 소멸로 놓치는 문제 방지)
+            raise gr.Error(f'{e}', duration=None)
 
     def _upload(self,
                 file_obj, mic_file, youtube_url: str, video_quality: str, audio_format: str):
@@ -111,7 +117,7 @@ class GradioASR:
         self.has_audio, self.has_video = ffmpeg_codec_type(self.source_file)
         logger.debug(f'upload_source: source_file={self.source_file}, has_audio={self.has_audio}, has_video={self.has_video}')
         if self.has_audio == False:     # error
-            return False
+            raise gr.Error(i18n("The selected media has no audio track."), duration=None)
         elif self.has_video == False:   # audio-only
             self.fm.set_split("Source.video", None)
             self.fm.set_split("Source.audio", self.source_file)   
@@ -134,8 +140,11 @@ class GradioASR:
         self.user_config.set("whisper_highlight_words", highlight_words)
         self.user_config.set("denoise_level", denoise_level)        
         
-        try: 
+        try:
             source_audio = self.fm.get_split("Source.audio")
+            # 미디어 미등록(또는 등록 진행 중) 상태에서 자막생성을 누른 경우
+            if not source_audio:
+                raise gr.Error(i18n("No media source registered. Please upload media and click Submit first."), duration=None)
             denoise_inst_path, denoise_vocal_path = self._denoise(source_audio, denoise_level)
             input_path = denoise_vocal_path if os.path.exists(denoise_vocal_path) else source_audio
             logger.debug(f'transcribe : input_path = {input_path}')
@@ -153,15 +162,18 @@ class GradioASR:
                         
             if(self.has_video and ffmpeg_browser_compatible(self.source_file)):
                 if srt_file:
-                    return (self.source_file, srt_file), srt_string, self.fm.get_all_files()
+                    # gradio 6: 자막은 (video, srt) 튜플 대신 Video 컴포넌트의 subtitles 속성으로 전달
+                    return gr.Video(value=self.source_file, subtitles=srt_file), srt_string, self.fm.get_all_files()
                 else:
-                    return self.source_file, srt_string, self.fm.get_all_files()      
+                    return self.source_file, srt_string, self.fm.get_all_files()
             else:
-                return None, srt_string, self.fm.get_all_files()  
+                return None, srt_string, self.fm.get_all_files()
             
+        except gr.Error:
+            raise
         except Exception as e:
             logger.error(f"[gradio_asr.py] transcribe - An error occurred: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None            
                 
     # return inst, vocal    

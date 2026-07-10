@@ -32,13 +32,13 @@ def translate_tab(user_config: UserConfig):
                     # gr.HTML(f'<center><h6>{i18n("Formats")}: {i18n("ass, ssa, srt, mpl2, tmp, vtt, microdvd, json")}</h6></center>')
                     source_language = gr.Dropdown(label=i18n("Source Language"), choices=translate.gradio_translate_languages(), value=user_config.get("translate_source_language", "English"))
                     translate_file_in = gr.File(label=i18n("Subtitle File"), type="filepath", file_count="single", file_types=subtitle_exts) 
-                    source_srt = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                    source_srt = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                             placeholder=i18n("Placeholder for Source Text"), lines=10)
                 with gr.Group():
                     gr.HTML(f'<center><h4>{i18n("Target Text")}</h4></center>')
                     translate_language = gr.Dropdown(label=i18n("Translated Language"), choices=translate.gradio_translate_languages(), value=user_config.get("translate_target_language", "English"))
                     translate_file_out = gr.File(label=i18n("Subtitle File"), interactive=False, type="filepath", file_count="single", file_types=subtitle_exts)                     
-                    target_srt = gr.Textbox(label=i18n("Translated captions"), interactive=False, show_label=True, max_lines=24, show_copy_button=True,
+                    target_srt = gr.Textbox(label=i18n("Translated captions"), interactive=False, show_label=True, max_lines=24, buttons=["copy"],
                                             lines=10)
                 
             with gr.Row():

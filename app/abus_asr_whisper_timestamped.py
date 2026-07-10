@@ -110,6 +110,7 @@ class WhisperTimestampedInference:
                 return subtitles
         except Exception as e:
             logger.error(f"[abus_asr_whisper_timestamped.py] transcribe_file - An error occurred: {e}")
+            raise
         finally:
             self.model = None
             self.release_cuda_memory()
@@ -195,13 +196,35 @@ class WhisperTimestampedInference:
             
         self.current_model_size = model_size
         self.current_compute_type = compute_type
-        
-        
-        self.model = whisper_timestamped.load_model(
-            device=self.device,
-            name=model_size,
-            download_root="model"
-        )
+
+        download_root = "model"
+        # whisper의 모델 다운로드(urllib)는 타임아웃이 없어 프록시가 전송을 끊으면
+        # 무한 대기함 → 다운로드 동안만 소켓 타임아웃을 걸어 실패를 표면화한다.
+        import socket
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(60)
+        try:
+            self.model = whisper_timestamped.load_model(
+                device=self.device,
+                name=model_size,
+                download_root=download_root
+            )
+        except RuntimeError as e:
+            # 다운로드가 중단되거나 중복 실행되면 .pt 파일이 손상되어 SHA256 오류가 남.
+            # 손상 파일을 지우고 1회 자동 재다운로드 (자가 치유).
+            if "SHA256" not in str(e):
+                raise
+            corrupt_file = os.path.join(download_root, f"{model_size}.pt")
+            logger.warning(f"[abus_asr_whisper_timestamped.py] update_model - corrupt model file, re-downloading: {corrupt_file}")
+            if os.path.exists(corrupt_file):
+                os.remove(corrupt_file)
+            self.model = whisper_timestamped.load_model(
+                device=self.device,
+                name=model_size,
+                download_root=download_root
+            )
+        finally:
+            socket.setdefaulttimeout(old_timeout)
         
 
 

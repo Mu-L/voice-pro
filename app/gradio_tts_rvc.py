@@ -110,7 +110,7 @@ class GradioTTSRVC:
             return tts_audio_file, rvc_audio_file, [tts_audio_file, rvc_audio_file]            
         except Exception as e:
             logger.error(f"[gradio_tts_rvc.py] gradio_deep_voice error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None
 
         

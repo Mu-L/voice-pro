@@ -58,7 +58,7 @@ class GradioF5TTS:
             return dubbing_file, dubbing_file
         except Exception as e:
             logger.error(f"[gradio_tts_f5.py] gradio_tts_dubbing_single - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None
 
 
@@ -88,7 +88,7 @@ class GradioF5TTS:
             return dubbing_file, dubbing_file
         except Exception as e:
             logger.error(f"[gradio_tts_f5.py] gradio_tts_dubbing_multi - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None
                 
 

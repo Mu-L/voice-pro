@@ -1,3 +1,5 @@
+import shutil
+
 from src.config import UserConfig
 from app.abus_demucs import *
 from app.abus_mdx import *
@@ -41,6 +43,9 @@ class GradioDemixing:
         self.user_config.set("audio_format", audio_format)
 
         try:
+            # ffmpeg는 다운로드 병합/오디오 추출에 필수 — 없으면 즉시 명확한 안내
+            if shutil.which("ffmpeg") is None:
+                raise gr.Error(i18n("ffmpeg is not installed. Run configure.bat (or configure.sh) as administrator to install it."), duration=None)
             logger.debug(f'upload_source: file_obj={file_obj}, mic_file={mic_file}, youtube_url={youtube_url}')
             self.fm = FileManager()
             if self._upload(file_obj, mic_file, youtube_url, video_quality, audio_format) == False:
@@ -49,7 +54,7 @@ class GradioDemixing:
             return self.fm.get_split("Source.video"), self.fm.get_split("Source.audio"), self.fm.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_demixing.py] upload_source - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None
                 
 
@@ -101,7 +106,7 @@ class GradioDemixing:
             return self.fm.get_split("Instrumental.video"), self.fm.get_split("Instrumental.audio"), self.fm.get_split("Vocals.video"), self.fm.get_split("Vocals.audio"), self.fm.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_demixing.py] demixing - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None, None, None
     
     def _demixing(self,

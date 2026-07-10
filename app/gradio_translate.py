@@ -121,7 +121,7 @@ class GradioTranslate:
             return translated_file
         except Exception as e:
             logger.error(f"[gradio_translate.py] _translate_subtitle : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None           
 
     def _translate_text(self, text, source_lang, target_lang):
@@ -130,7 +130,7 @@ class GradioTranslate:
             return translated   
         except Exception as e:
             logger.error(f"[gradio_translate.py] _translate_text : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None            
             
 

@@ -31,7 +31,7 @@ def tts_kokoro_tab(user_config: UserConfig):
                 kokoro_language_dropdown = gr.Dropdown(label=i18n("Language"), choices=kokoro_voice.gradio_languages(), value=kokoro_voice.selected_language)
                 kokoro_voice_dropdown = gr.Dropdown(label=i18n("Voice"), choices=kokoro_voice.gradio_voices(), value=user_config.get("kokoro_voice", "🚺 Heart ❤️"))
                 kokoro_sample_audio = gr.Audio(label="Sample Audio", type="filepath", 
-                                           editable=False, interactive=False, show_download_button=False)
+                                           editable=False, interactive=False)
                 kokoro_transcript = gr.Textbox(label=i18n("Transcript"), interactive=False, max_lines=6, lines=3,
                                               placeholder=i18n("Optional"))       
 
@@ -39,7 +39,7 @@ def tts_kokoro_tab(user_config: UserConfig):
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Script")}</h4></center>')
                 dubbing_file_in = gr.File(label=i18n("Subtitle File"), type="filepath", file_count="single", file_types=subtitle_exts)
-                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Source Text"), lines=5)
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Synthesized voice")}</h4></center>')

@@ -1,4 +1,6 @@
 import json
+import shutil
+
 from src.config import UserConfig
 
 from app.abus_downloader import *
@@ -13,7 +15,6 @@ from app.abus_hf import AbusHuggingFace
 from app.abus_asr_faster_whisper import *
 from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
-from app.abus_asr_whisperx import *
 
 import src.ui as ui
 from src.i18n.i18n import I18nAuto
@@ -39,9 +40,8 @@ class GradioKara:
         switch_dict = {
             'faster-whisper': lambda: FasterWhisperInference(),
             'whisper': lambda: WhisperInference(),
-            'whisper-timestamped': lambda: WhisperTimestampedInference(),
-            'whisperX': lambda: WhisperXInference()
-        }
+            'whisper-timestamped': lambda: WhisperTimestampedInference()
+            }
         return switch_dict.get(case, lambda: FasterWhisperInference())()    
 
 
@@ -56,7 +56,7 @@ class GradioKara:
 
 
     def get_asr_engines(self):
-        return ['faster-whisper', 'whisper', 'whisper-timestamped', 'whisperX']
+        return ['faster-whisper', 'whisper', 'whisper-timestamped']
 
     def update_whisper_models(self, asr_engine):
         whisper_inf = self.switch_case(asr_engine)       
@@ -84,6 +84,9 @@ class GradioKara:
         self.user_config.set("audio_format", audio_format)
 
         try:
+            # ffmpeg는 다운로드 병합/오디오 추출에 필수 — 없으면 즉시 명확한 안내
+            if shutil.which("ffmpeg") is None:
+                raise gr.Error(i18n("ffmpeg is not installed. Run configure.bat (or configure.sh) as administrator to install it."), duration=None)
             logger.debug(f'upload_source: file_obj={file_obj}, mic_file={mic_file}, youtube_url={youtube_url}')            
             self.fm = FileManager()
             if self._upload(file_obj, mic_file, youtube_url, video_quality, audio_format) == False:
@@ -92,7 +95,7 @@ class GradioKara:
             return self.fm.get_split("Source.video"), self.fm.get_split("Source.audio"), self.fm.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_kara.py] upload_source - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None
                 
 
@@ -143,7 +146,7 @@ class GradioKara:
             return self.fm.get_split("Instrumental.video"), self.fm.get_split("Instrumental.audio"), self.fm.get_split("Vocals.video"), self.fm.get_split("Vocals.audio"), self.fm.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_kara.py] demixing - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None, None, None
     
     
@@ -217,12 +220,12 @@ class GradioKara:
             if(self.has_video and ffmpeg_browser_compatible(self.source_file)):
                 if inst_video and vocal_video:
                     if srt_file:
-                        return (self.source_file, srt_file), (inst_video, srt_file), (vocal_video, srt_file), self.fm.get_all_files()      
+                        return gr.Video(value=self.source_file, subtitles=srt_file), gr.Video(value=inst_video, subtitles=srt_file), gr.Video(value=vocal_video, subtitles=srt_file), self.fm.get_all_files()      
                     else:
                         return self.source_file, inst_video, vocal_video, self.fm.get_all_files()
                 else:
                     if srt_file:
-                        return (self.source_file, srt_file), None, None, self.fm.get_all_files()      
+                        return gr.Video(value=self.source_file, subtitles=srt_file), None, None, self.fm.get_all_files()      
                     else:
                         return self.source_file, None, None, self.fm.get_all_files()
             else:
@@ -230,7 +233,7 @@ class GradioKara:
             
         except Exception as e:
             logger.error(f"[gradio_kara.py] transcribe - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None, None, None    
  
  

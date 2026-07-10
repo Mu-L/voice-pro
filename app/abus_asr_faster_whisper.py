@@ -42,30 +42,24 @@ class FasterWhisperInference:
         system = platform.system()
         if system != "Windows":
             return
-                
-        current_path = os.environ.get('PATH', '')
-        conda_prefix = os.environ.get('CONDA_PREFIX', '')
 
-        # cudnn bin 폴더의 경로
-        cudnn_bin_path = os.path.join(conda_prefix, 'Lib', 'site-packages', 'nvidia', 'cudnn', 'bin')
-
-        # PATH에 cudnn bin 경로가 없으면 추가
-        if cudnn_bin_path not in current_path:
-            new_path = f"{current_path};{cudnn_bin_path}"
-            os.environ['PATH'] = new_path
-            logger.debug(f"[abus_asr_faster_whisper.py] set_environment - PATH에 다음 경로가 추가되었습니다: {cudnn_bin_path}")
-
-            # 사용자 환경변수에 영구 저장
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment', 0, winreg.KEY_ALL_ACCESS)
-            winreg.SetValueEx(key, 'PATH', 0, winreg.REG_EXPAND_SZ, new_path)
-            winreg.CloseKey(key)     
-
-
-        # sys.path에도 추가 (Python 모듈 검색 경로)
-        if cudnn_bin_path not in sys.path:
-            sys.path.append(cudnn_bin_path)
-            logger.debug(f"[abus_asr_faster_whisper.py] set_environment - sys.path에 다음 경로가 추가되었습니다: {cudnn_bin_path}")
+        # ctranslate2가 cuDNN 9 DLL을 찾을 수 있도록 경로 추가.
+        # torch 2.8+ Windows 휠은 cuDNN DLL을 torch/lib에 내장하고,
+        # nvidia pip 휠(site-packages/nvidia/cudnn/bin)은 폴백 경로.
+        candidates = [
+            os.path.join(sys.prefix, 'Lib', 'site-packages', 'torch', 'lib'),
+            os.path.join(sys.prefix, 'Lib', 'site-packages', 'nvidia', 'cudnn', 'bin'),
+        ]
+        for dll_path in candidates:
+            if not os.path.isdir(dll_path):
+                continue
+            if dll_path not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = dll_path + os.pathsep + os.environ.get('PATH', '')
+            try:
+                os.add_dll_directory(dll_path)
+            except OSError:
+                pass
+            logger.debug(f"[abus_asr_faster_whisper.py] set_environment - DLL 경로가 추가되었습니다: {dll_path}")
         
         
     @staticmethod
@@ -150,6 +144,7 @@ class FasterWhisperInference:
             return subtitles
         except Exception as e:
             logger.error(f"[abus_asr_faster_whisper.py] transcribe_file - An error occurred: {e}")
+            raise
         finally:
             self.model = None
             self.release_cuda_memory()

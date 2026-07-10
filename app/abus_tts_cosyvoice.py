@@ -31,7 +31,7 @@ max_val = 0.8
 prompt_sr = 16000
 
 import torchaudio
-from cosyvoice.cli.cosyvoice import CosyVoice2
+from cosyvoice.cli.cosyvoice import CosyVoice2, CosyVoice3
 from cosyvoice.utils.file_utils import load_wav
 from cosyvoice.utils.common import set_all_random_seed
 
@@ -41,35 +41,64 @@ from cosyvoice.utils.common import set_all_random_seed
 #                     format='%(asctime)s %(levelname)s %(message)s')
 
 
-from modelscope import snapshot_download
-
 os.environ['HF_HUB_DISABLE_SYMLINKS_WARNING'] = 'True'
 
+# 지원 모델. CosyVoice2-0.5B는 ABUS-AI zip으로 선다운로드되고 (abus_hf_files-voice.json),
+# Fun-CosyVoice3-0.5B(한국어 포함 9개 언어)는 최초 사용 시 공식 HF 리포에서 받는다.
+COSYVOICE_MODEL_CHOICES = ["CosyVoice2-0.5B", "Fun-CosyVoice3-0.5B"]
+COSYVOICE3_HF_REPO = "FunAudioLLM/Fun-CosyVoice3-0.5B-2512"
+
+
 class CosyVoiceInference:
-    def __init__(self):
-        self.model_dir = os.path.join(path_model_folder(), "cosyvoice", "CosyVoice2-0.5B")
-        
-        # snapshot_download('iic/CosyVoice2-0.5B', local_dir=self.model_dir)        
-        # self._download_model()
+    def __init__(self, model_name: str = "CosyVoice2-0.5B"):
+        self.model_name = model_name if model_name in COSYVOICE_MODEL_CHOICES else COSYVOICE_MODEL_CHOICES[0]
         self._cosyvoice = None
-       
+
+
+    def set_model(self, model_name: str):
+        if model_name not in COSYVOICE_MODEL_CHOICES or model_name == self.model_name:
+            return
+        logger.debug(f"[abus_tts_cosyvoice.py] set_model - {self.model_name} -> {model_name}")
+        self.model_name = model_name
+        if self._cosyvoice is not None:
+            self._cosyvoice = None
+            self.release_cuda_memory()
+
+
+    def _model_dir(self):
+        return os.path.join(path_model_folder(), "cosyvoice", self.model_name)
+
+
+    def _create_model(self):
+        model_dir = self._model_dir()
+        if self.model_name == "Fun-CosyVoice3-0.5B":
+            # 최초 사용 시 공식 HF 리포에서 다운로드 (idempotent, 이어받기 지원)
+            if not os.path.exists(os.path.join(model_dir, "llm.pt")):
+                logger.info(f"[abus_tts_cosyvoice.py] downloading {COSYVOICE3_HF_REPO} to {model_dir} ...")
+                from huggingface_hub import snapshot_download
+                snapshot_download(repo_id=COSYVOICE3_HF_REPO, local_dir=model_dir)
+            print("Creating CosyVoice3...")
+            return CosyVoice3(model_dir)
+
+        # ABUS-AI zip은 구버전 레이아웃(cosyvoice.yaml)이므로, 재벤더링된 코드가 요구하는
+        # cosyvoice2.yaml이 없으면 공식 리포에서 보충한다 (기존 설치본 자동 치유).
+        if not os.path.exists(os.path.join(model_dir, "cosyvoice2.yaml")):
+            logger.info(f"[abus_tts_cosyvoice.py] fetching cosyvoice2.yaml into {model_dir} ...")
+            from huggingface_hub import hf_hub_download
+            hf_hub_download(repo_id="FunAudioLLM/CosyVoice2-0.5B", filename="cosyvoice2.yaml", local_dir=model_dir)
+        print("Creating CosyVoice2...")
+        return CosyVoice2(model_dir)
+
 
     def __getattr__(self, name):
         if name == "cosyvoice":
             if self._cosyvoice is None:
-                print("Creating CosyVoice2...")
-                self._cosyvoice = CosyVoice2(self.model_dir)
+                self._cosyvoice = self._create_model()
             return self._cosyvoice
         else:
             raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
-    
-    def _download_model(self):
-        CosyVoice2_05B = HF_File('cosyvoice', 'ABUS-AI/CosyVoice', '', 'CosyVoice2-0.5B.zip', 9003318755, 0)
-        self.has_model, _ = CosyVoice2_05B.download(force_download=False)
-            
-   
-    
+
     @staticmethod
     def release_cuda_memory():
         gc.collect()
@@ -83,32 +112,52 @@ class CosyVoiceInference:
         set_all_random_seed(seed)
     
     
-    def generate_audio_zero_shot(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):       
+    def _prepare_prompt_wav(self, ref_audio):
+        # 업스트림 inference_* API는 이제 텐서 대신 wav 파일 경로를 받는다.
+        # 기존 전처리(무음 트림/정규화)를 유지하기 위해 임시 wav로 저장해 경로를 넘긴다.
+        speech = self.postprocess(load_wav(ref_audio, prompt_sr))
+        prompt_wav = os.path.join(path_dubbing_folder(), path_new_filename(ext=".wav"))
+        torchaudio.save(prompt_wav, speech, prompt_sr)
+        return prompt_wav
+
+
+    def _is_cv3(self):
+        return self.model_name.startswith("Fun-CosyVoice3")
+
+    # CosyVoice3는 시스템 프롬프트 + <|endofprompt|> 마커를 요구한다 (업스트림 example.py 참조).
+    # 누락 시 LLM 스레드가 조용히 죽어 빈 오디오가 생성된다.
+    CV3_SYSTEM_PROMPT = "You are a helpful assistant.<|endofprompt|>"
+
+
+    def generate_audio_zero_shot(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):
         logger.debug(f"[abus_tts_cosyvoice.py] generate_audio_zero_shot - ref_audio = {ref_audio}, ref_text = {ref_text}, dubbing_text = {dubbing_text}")
-    
-        # zero_shot usage    
-        prompt_speech_16k = self.postprocess(load_wav(ref_audio, prompt_sr))
-        for i, j in enumerate(self.cosyvoice.inference_zero_shot(dubbing_text, ref_text, prompt_speech_16k, stream=False, speed=speed_factor, text_frontend=False)):
+
+        # zero_shot usage
+        prompt_wav = self._prepare_prompt_wav(ref_audio)
+        prompt_text = self.CV3_SYSTEM_PROMPT + ref_text if self._is_cv3() else ref_text
+        for i, j in enumerate(self.cosyvoice.inference_zero_shot(dubbing_text, prompt_text, prompt_wav, stream=False, speed=speed_factor, text_frontend=False)):
             torchaudio.save(output_file, j['tts_speech'], self.cosyvoice.sample_rate)
-        
-           
-    def generate_audio_cross_lingual(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):       
+
+
+    def generate_audio_cross_lingual(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):
         logger.debug(f"[abus_tts_cosyvoice.py] generate_audio_cross_lingual - ref_audio = {ref_audio}, ref_text = {ref_text}, dubbing_text = {dubbing_text}")
-    
-        # fine grained control, for supported control, check cosyvoice/tokenizer/tokenizer.py#L248    
-        prompt_speech_16k = self.postprocess(load_wav(ref_audio, prompt_sr))
-        for i, j in enumerate(self.cosyvoice.inference_cross_lingual(dubbing_text, prompt_speech_16k, speed=speed_factor, stream=False)):
+
+        # fine grained control, for supported control, check cosyvoice/tokenizer/tokenizer.py#L248
+        prompt_wav = self._prepare_prompt_wav(ref_audio)
+        tts_text = self.CV3_SYSTEM_PROMPT + dubbing_text if self._is_cv3() else dubbing_text
+        for i, j in enumerate(self.cosyvoice.inference_cross_lingual(tts_text, prompt_wav, speed=speed_factor, stream=False)):
             torchaudio.save(output_file, j['tts_speech'], self.cosyvoice.sample_rate)
-    
-    def generate_audio_instruct(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):       
+
+    def generate_audio_instruct(self, dubbing_text:str, output_file, ref_audio, ref_text, speed_factor):
         logger.debug(f"[abus_tts_cosyvoice.py] generate_audio_instruct - ref_audio = {ref_audio}, ref_text = {ref_text}, dubbing_text = {dubbing_text}")
-    
+
         # instruct usage
-        prompt_speech_16k = self.postprocess(load_wav(ref_audio, prompt_sr))
-        for i, j in enumerate(self.cosyvoice.inference_instruct2(dubbing_text, '', prompt_speech_16k, stream=False)):
+        prompt_wav = self._prepare_prompt_wav(ref_audio)
+        instruct_text = self.CV3_SYSTEM_PROMPT if self._is_cv3() else ''
+        for i, j in enumerate(self.cosyvoice.inference_instruct2(dubbing_text, instruct_text, prompt_wav, stream=False)):
             torchaudio.save(output_file, j['tts_speech'], self.cosyvoice.sample_rate)
-                    
-    
+
+
     def postprocess(self, speech, top_db=60, hop_length=220, win_length=440):
         speech, _ = librosa.effects.trim(
             speech, top_db=top_db,

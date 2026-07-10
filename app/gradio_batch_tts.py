@@ -20,7 +20,6 @@ from app.abus_batch import *
 from app.abus_asr_faster_whisper import *
 from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
-from app.abus_asr_whisperx import *
 
 
 import src.ui as ui
@@ -56,9 +55,8 @@ class GradioBatchTTS:
         switch_dict = {
             'faster-whisper': lambda: FasterWhisperInference(),
             'whisper': lambda: WhisperInference(),
-            'whisper-timestamped': lambda: WhisperTimestampedInference(),
-            'whisperX': lambda: WhisperXInference()
-        }
+            'whisper-timestamped': lambda: WhisperTimestampedInference()
+            }
         return switch_dict.get(case, lambda: FasterWhisperInference())()    
             
             
@@ -75,7 +73,7 @@ class GradioBatchTTS:
         cmd_open_explorer(path_gradio_folder())
         
     def get_asr_engines(self):
-        return ['faster-whisper', 'whisper', 'whisper-timestamped', 'whisperX']
+        return ['faster-whisper', 'whisper', 'whisper-timestamped']
     
     def update_whisper_models(self, asr_engine):
         whisper_inf = self.switch_case(asr_engine)       
@@ -133,7 +131,7 @@ class GradioBatchTTS:
             return self.batch_manager.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_batch_tts.py] gradio_upload_source - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return self.batch_manager.get_all_files()    
         
 
@@ -207,7 +205,7 @@ class GradioBatchTTS:
             return self.batch_manager.get_all_files()
         except Exception as e:
             logger.error(f"[gradio_batch_tts.py] gradio_translate - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None
                     
             

@@ -34,12 +34,12 @@ def tts_cosyvoice_tab(user_config: UserConfig):
                 cosy_reference_audio = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                 cosy_reference_transcript = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                               placeholder=i18n("Required"))
-                cosy_reference_image = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)   
+                cosy_reference_image = gr.Image(label="Photo", type="filepath", interactive=False)   
         with gr.Column(scale=8):
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Script")}</h4></center>')
                 dubbing_file_in = gr.File(label=i18n("Subtitle File"), type="filepath", file_count="single", file_types=subtitle_exts)
-                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Source Text"), lines=5)
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Synthesized voice")}</h4></center>')
@@ -49,11 +49,13 @@ def tts_cosyvoice_tab(user_config: UserConfig):
                 workspace_button = gr.Button(value=i18n("🗂️ Open workspace folder"), variant="secondary")
                 temp_button = gr.Button(value=i18n("🗀 Open Temp folder"), variant="secondary")                        
         with gr.Column(scale=4):                     
-            with gr.Group():                            
+            with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Speech Generation")}</h4></center>')
+                cosy_model_dropdown = gr.Dropdown(label=i18n("Model"), choices=COSYVOICE_MODEL_CHOICES,
+                                                  value=user_config.get("cosy_model", "CosyVoice2-0.5B"))
                 cosy_mode_choice = gr.Radio(choices=["Zero-Shot", "Cross-Lingual", "Instruct"], label="Inference Mode", value="Zero-Shot")
                 cosy_tts_speed = gr.Slider(0.3, 2.0, value=1.0, step = 0.1, label=i18n("Speech rate"), info="0.3 ~ 2.0")
-                audio_format_radio = gr.Radio(label=i18n("Audio Format"), choices=["wav", "flac", "mp3"], value=user_config.get("audio_format", "mp3"))                   
+                audio_format_radio = gr.Radio(label=i18n("Audio Format"), choices=["wav", "flac", "mp3"], value=user_config.get("audio_format", "mp3"))
             with gr.Row():
                 cosy_default_button = gr.ClearButton(value=i18n("Load Defaults")) 
                 cosy_dubbing_button = gr.Button(value=i18n("Synthesis"), variant="primary")  
@@ -66,9 +68,12 @@ def tts_cosyvoice_tab(user_config: UserConfig):
     workspace_button.click(tts.gradio_workspace_folder)
     temp_button.click(tts.gradio_temp_folder)
     
+    cosy_model_dropdown.change(tts.gradio_change_model,
+                        inputs=[cosy_model_dropdown])
+
     cosy_language_radio.change(cosy_reference_voice.gradio_change_language,
                         inputs=[cosy_language_radio],
-                        outputs=[cosy_voice_dropdown])      
+                        outputs=[cosy_voice_dropdown])
     
     cosy_voice_dropdown.change(cosy_reference_voice.gradio_change_voice,
                             inputs=[cosy_voice_dropdown],

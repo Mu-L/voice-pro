@@ -10,7 +10,6 @@ from app.abus_genuine import *
 from app.abus_asr_faster_whisper import *
 from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
-from app.abus_asr_whisperx import *
 
 from src.i18n.i18n import I18nAuto
 i18n = I18nAuto()
@@ -38,9 +37,8 @@ class GradioLiveTranslate:
         switch_dict = {
             'faster-whisper': lambda: FasterWhisperInference(),
             'whisper': lambda: WhisperInference(),
-            'whisper-timestamped': lambda: WhisperTimestampedInference(),
-            'whisperX': lambda: WhisperXInference()
-        }
+            'whisper-timestamped': lambda: WhisperTimestampedInference()
+            }
         return switch_dict.get(case, lambda: FasterWhisperInference())()    
 
             

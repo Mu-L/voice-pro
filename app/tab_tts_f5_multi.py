@@ -33,13 +33,13 @@ def tts_f5_multi_tab(user_config: UserConfig):
                 celeb_audio_spk1 = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                 celeb_transcript_spk1 = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                               placeholder=i18n("Optional"))
-                celeb_image_spk1 = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)
+                celeb_image_spk1 = gr.Image(label="Photo", type="filepath", interactive=False)
             with gr.Row():                
                 add_button_spk1 = gr.Button(value=i18n("Add Label: {spk1}"), variant="primary") 
         with gr.Column(scale=8):
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Script")}</h4></center>')
-                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=False, max_lines=24, show_copy_button=True,
+                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=False, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Podcast script"), lines=10)
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Synthesized voice")}</h4></center>')
@@ -57,7 +57,7 @@ def tts_f5_multi_tab(user_config: UserConfig):
                 celeb_audio_spk2 = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                 celeb_transcript_spk2 = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                               placeholder=i18n("Optional"))
-                celeb_image_spk2 = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)
+                celeb_image_spk2 = gr.Image(label="Photo", type="filepath", interactive=False)
             with gr.Row():                
                 add_button_spk2 = gr.Button(value=i18n("Add Label: {spk2}"), variant="primary")                
             with gr.Group():

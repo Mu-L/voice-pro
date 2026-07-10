@@ -1,6 +1,7 @@
 
 import json
 import asyncio
+import shutil
 
 from src.config import UserConfig
 from app.abus_downloader import *
@@ -14,7 +15,6 @@ from app.abus_asr_parameters import *
 from app.abus_asr_faster_whisper import *
 from app.abus_asr_whisper import *
 from app.abus_asr_whisper_timestamped import *
-from app.abus_asr_whisperx import *
 
 from app.abus_translate_deep import *
 from app.abus_translate_azure import *
@@ -49,7 +49,7 @@ class GradioGulliver:
         self.edge_tts = AzureTTS() if azure_text_api_working() else EdgeTTS()
         
         self.f5_tts = F5TTS()
-        self.cosy_tts = CosyVoiceInference()
+        self.cosy_tts = CosyVoiceInference(self.user_config.get("cosy_model", "CosyVoice2-0.5B"))
         
         self.kokoro_tts = KokoroTTS()
         self.kokoro_vm = KokoroVoiceManager()
@@ -68,9 +68,8 @@ class GradioGulliver:
         switch_dict = {
             'faster-whisper': lambda: FasterWhisperInference(),
             'whisper': lambda: WhisperInference(),
-            'whisper-timestamped': lambda: WhisperTimestampedInference(),
-            'whisperX': lambda: WhisperXInference()
-        }
+            'whisper-timestamped': lambda: WhisperTimestampedInference()
+            }
         return switch_dict.get(case, lambda: FasterWhisperInference())()    
             
             
@@ -82,7 +81,7 @@ class GradioGulliver:
     
     
     def get_asr_engines(self):
-        return ['faster-whisper', 'whisper', 'whisper-timestamped', 'whisperX']
+        return ['faster-whisper', 'whisper', 'whisper-timestamped']
     
     def update_whisper_models(self, asr_engine):
         whisper_inf = self.switch_case(asr_engine)       
@@ -111,20 +110,26 @@ class GradioGulliver:
         self.user_config.set("audio_format", audio_format)
 
         try:
-            logger.debug(f'upload_source: file_obj={file_obj}, mic_file={mic_file}, youtube_url={youtube_url}')          
-            self.fm = FileManager()           
+            logger.debug(f'upload_source: file_obj={file_obj}, mic_file={mic_file}, youtube_url={youtube_url}')
+            # ffmpeg는 다운로드 병합/오디오 추출에 필수 — 없으면 즉시 명확한 안내
+            if shutil.which("ffmpeg") is None:
+                raise gr.Error(i18n("ffmpeg is not installed. Run configure.bat (or configure.sh) as administrator to install it."), duration=None)
+
+            self.fm = FileManager()
             if self._upload(file_obj, mic_file, youtube_url, video_quality, audio_format) == False:
-                return None, None, None
-                            
-            source_audio = self.fm.get_split("Source.audio")           
+                raise gr.Error(i18n("Please provide a media file, a microphone recording, or a YouTube URL."), duration=None)
+
+            source_audio = self.fm.get_split("Source.audio")
             if(self.has_video and ffmpeg_browser_compatible(self.source_file)):
                 return self.source_file, source_audio, self.fm.get_all_files()
             else:
                 return None, source_audio, self.fm.get_all_files()
+        except gr.Error:
+            raise
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] gradio_upload_source - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
-            return None, None, None    
+            # duration=None: 사용자가 닫기 전까지 유지되는 오류 토스트 (자동 소멸로 놓치는 문제 방지)
+            raise gr.Error(f'{e}', duration=None)
         
 
     def _upload(self,
@@ -144,7 +149,7 @@ class GradioGulliver:
         self.has_audio, self.has_video = ffmpeg_codec_type(self.source_file)
         logger.debug(f'upload_source: source_file={self.source_file}, has_audio={self.has_audio}, has_video={self.has_video}')
         if self.has_audio == False:     # error
-            return False
+            raise gr.Error(i18n("The selected media has no audio track."), duration=None)
         elif self.has_video == False:   # audio-only
             self.fm.set_split("Source.video", None)
             self.fm.set_split("Source.audio", self.source_file)   
@@ -169,8 +174,11 @@ class GradioGulliver:
         self.user_config.set("whisper_compute_type", compute_type)
         self.user_config.set("denoise_level", denoise_level)          
         
-        try:                          
+        try:
             source_audio = self.fm.get_split("Source.audio")
+            # 미디어 미등록(또는 등록 진행 중) 상태에서 자막생성을 누른 경우
+            if not source_audio:
+                raise gr.Error(i18n("No media source registered. Please upload media and click Submit first."), duration=None)
             denoise_inst_path, denoise_vocal_path = self._denoise(source_audio, denoise_level)
             input_path = denoise_vocal_path if os.path.exists(denoise_vocal_path) else source_audio
 
@@ -187,15 +195,17 @@ class GradioGulliver:
             
             if(self.has_video and ffmpeg_browser_compatible(self.source_file)):
                 if srt_file:
-                    return (self.source_file, srt_file), source_audio, srt_string, self.fm.get_all_files()
+                    # gradio 6: 자막은 (video, srt) 튜플 대신 Video 컴포넌트의 subtitles 속성으로 전달
+                    return gr.Video(value=self.source_file, subtitles=srt_file), source_audio, srt_string, self.fm.get_all_files()
                 else:
                     return self.source_file, source_audio, srt_string, self.fm.get_all_files()
             else:
                 return None, source_audio, srt_string, self.fm.get_all_files()
+        except gr.Error:
+            raise
         except Exception as e:
-            logger.error(f"[gradio_gulliver.py] gradio_upload_source - Error transcribing file: {e}")
-            gr.Warning(f'{e}')
-            return None, None, None, None    
+            logger.error(f"[gradio_gulliver.py] gradio_whisper - Error transcribing file: {e}")
+            raise gr.Error(f'{e}', duration=None)
 
     
     # return inst, vocal    
@@ -266,7 +276,7 @@ class GradioGulliver:
         source_video_file = self.fm.get_split("Source.video")
         source_audio_file = self.fm.get_split("Source.audio")
         
-        output_video_path = (source_video_file, translation_file) if source_video_file and translation_file else source_video_file
+        output_video_path = gr.Video(value=source_video_file, subtitles=translation_file) if source_video_file and translation_file else source_video_file
         output_audio_path = source_audio_file
         output_translation_text = self._read_file(translation_file) if translation_file else translation_text
         return output_video_path, output_audio_path, output_translation_text, self.fm.get_all_files()    
@@ -293,7 +303,7 @@ class GradioGulliver:
             return translation_file
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _translate_subtitle - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None           
 
     def _translate_text(self, text, source_lang, target_lang):
@@ -302,7 +312,7 @@ class GradioGulliver:
             return translated   
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _translate_text - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None            
 
 
@@ -357,7 +367,7 @@ class GradioGulliver:
             aidub_video_file, mixed_audio_file = self._edge_tts_text(translation_text, 
                                                 voice_name, semitones, speed_factor, volume_factor, audio_format)
 
-        output_video_path = (aidub_video_file, translation_file) if aidub_video_file and translation_file else aidub_video_file
+        output_video_path = gr.Video(value=aidub_video_file, subtitles=translation_file) if aidub_video_file and translation_file else aidub_video_file
         output_audio_path = mixed_audio_file
         return output_video_path, output_audio_path, self.fm.get_all_files()      
                             
@@ -393,7 +403,7 @@ class GradioGulliver:
                 return None, mixed_audio_file, 
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _edge_tts_text - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None    
 
     
@@ -433,7 +443,7 @@ class GradioGulliver:
                 return None, mixed_audio_file
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _edge_tts_subtitle - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None 
 
 
@@ -477,7 +487,7 @@ class GradioGulliver:
             aidub_video_file, mixed_audio_file = self._f5_tts_single(translation_text, 
                                                 celeb_name, celeb_audio, celeb_transcript, model_choice, speed_factor, audio_format)
 
-        output_video_path = (aidub_video_file, translation_file) if aidub_video_file and translation_file else aidub_video_file
+        output_video_path = gr.Video(value=aidub_video_file, subtitles=translation_file) if aidub_video_file and translation_file else aidub_video_file
         output_audio_path = mixed_audio_file
         return output_video_path, output_audio_path, self.fm.get_all_files()                   
                   
@@ -511,7 +521,7 @@ class GradioGulliver:
                 return None, mixed_audio_file
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _f5_tts_single - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None    
     
     
@@ -546,7 +556,7 @@ class GradioGulliver:
             aidub_video_file, mixed_audio_file = self._cosy_tts_single(translation_text, 
                                                 celeb_name, celeb_audio, celeb_transcript, mode_choice, speed_factor, audio_format)
 
-        output_video_path = (aidub_video_file, translation_file) if aidub_video_file and translation_file else aidub_video_file
+        output_video_path = gr.Video(value=aidub_video_file, subtitles=translation_file) if aidub_video_file and translation_file else aidub_video_file
         output_audio_path = mixed_audio_file
         return output_video_path, output_audio_path, self.fm.get_all_files()        
 
@@ -580,7 +590,7 @@ class GradioGulliver:
                 return None, mixed_audio_file
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _cosy_tts_single - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None    
        
        
@@ -624,7 +634,7 @@ class GradioGulliver:
                                                 language_name, voice_name, speed_factor, audio_format)
         
         
-        output_video_path = (aidub_video_file, translation_file) if aidub_video_file and translation_file else aidub_video_file
+        output_video_path = gr.Video(value=aidub_video_file, subtitles=translation_file) if aidub_video_file and translation_file else aidub_video_file
         output_audio_path = mixed_audio_file
         return output_video_path, output_audio_path, self.fm.get_all_files()        
                      
@@ -659,7 +669,7 @@ class GradioGulliver:
                 return None, mixed_audio_file, 
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _kokoro_tts_text - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None    
 
     
@@ -699,5 +709,5 @@ class GradioGulliver:
                 return None, mixed_audio_file
         except Exception as e:
             logger.error(f"[gradio_gulliver.py] _kokoro_tts_subtitle - Error : {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None         

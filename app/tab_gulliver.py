@@ -68,14 +68,14 @@ def gulliver_tab(user_config: UserConfig):
                         gr.HTML(f'<center><h4>{i18n("Input Video")}</h4></center>')
                         input_video = gr.Video(label=i18n("Video"), interactive=False)
                         input_audio = gr.Audio(label=i18n("Audio"), type="filepath", interactive=False)
-                        transcription_textbox = gr.Textbox(label=i18n("Subtitles"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                        transcription_textbox = gr.Textbox(label=i18n("Subtitles"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Source SRT"), lines=15)
                 with gr.Column():
                     with gr.Group():
                         gr.HTML(f'<center><h4>{i18n("Output Video")}</h4></center>')    
                         dubbing_video = gr.Video(label=i18n("Video"), interactive=False)
                         dubbing_audio = gr.Audio(label=i18n("Audio"), type="filepath", interactive=False)
-                        translation_textbox = gr.Textbox(label=i18n("Translated captions"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                        translation_textbox = gr.Textbox(label=i18n("Translated captions"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Translated Text"), lines=15)
             dubbing_files = gr.File(label=i18n("Files"), type="filepath", file_count="multiple", interactive=False) 
             with gr.Row():
@@ -100,7 +100,7 @@ def gulliver_tab(user_config: UserConfig):
                     ms_language_dropdown = gr.Dropdown(label=i18n("Language"), choices=ms_voice.gradio_languages(), value=ms_voice.selected_language)                            
                     ms_voice_dropdown = gr.Dropdown(label=i18n("Voice"), choices=ms_voice.gradio_voices(), value=user_config.get("ms_voice", "UNITED STATES-Ana-Female"))                    
                     ms_sample_audio = gr.Audio(label="Sample Audio", type="filepath", 
-                                            editable=False, interactive=False, show_download_button=False)
+                                            editable=False, interactive=False)
                     edge_tts_pitch = gr.Slider(-400, 400, value=user_config.get("edge_tts_pitch", 0), step = 10, label=i18n("Pitch(Hz)"), info="-400Hz ~ +400Hz")
                     edge_tts_rate = gr.Slider(-100, 200, value=user_config.get("edge_tts_rate", 0), step = 1, label=i18n("Speech rate"), info="-100% ~ +200%")
                     edge_tts_volume = gr.Slider(-100, 100, value=user_config.get("edge_tts_volume", 0), step=1, label=i18n("Speech volume"), info="-100% ~ +100%")
@@ -115,7 +115,7 @@ def gulliver_tab(user_config: UserConfig):
                     f5_reference_audio = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                     f5_reference_transcript = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                                 placeholder=i18n("Optional"))
-                    f5_reference_image = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)       
+                    f5_reference_image = gr.Image(label="Photo", type="filepath", interactive=False)       
                     f5_model_choice = gr.Dropdown(choices=gulliver.gradio_f5_available_models(), label="Choose Model", value="SWivid/F5-TTS_v1")
                     f5_tts_speed = gr.Slider(0.3, 2.0, value=1.0, step = 0.1, label=i18n("Speech rate"), info="0.3 ~ 2.0")
                 with gr.Row():
@@ -130,7 +130,7 @@ def gulliver_tab(user_config: UserConfig):
                     cosy_reference_audio = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                     cosy_reference_transcript = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                                 placeholder=i18n("Required"))
-                    cosy_reference_image = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)   
+                    cosy_reference_image = gr.Image(label="Photo", type="filepath", interactive=False)   
 
                     cosy_mode_choice = gr.Radio(choices=["Zero-Shot", "Cross-Lingual", "Instruct"], label="Inference Mode", value="Zero-Shot")
                     cosy_tts_speed = gr.Slider(0.3, 2.0, value=1.0, step = 0.1, label=i18n("Speech rate"), info="0.3 ~ 2.0")
@@ -144,7 +144,7 @@ def gulliver_tab(user_config: UserConfig):
                     kokoro_language_dropdown = gr.Dropdown(label=i18n("Language"), choices=kokoro_voice.gradio_languages(), value=kokoro_voice.selected_language)
                     kokoro_voice_dropdown = gr.Dropdown(label=i18n("Voice"), choices=kokoro_voice.gradio_voices(), value=user_config.get("kokoro_voice", "🚺 Heart ❤️"))
                     kokoro_sample_audio = gr.Audio(label="Sample Audio", type="filepath", 
-                                            editable=False, interactive=False, show_download_button=False)
+                                            editable=False, interactive=False)
                     kokoro_transcript = gr.Textbox(label=i18n("Transcript"), interactive=False, max_lines=6, lines=3,
                                               placeholder=i18n("Optional"))    
                     kokoro_tts_speed = gr.Slider(0.3, 2.0, value=1.0, step = 0.1, label=i18n("Speech rate"), info="0.3 ~ 2.0")                    

@@ -34,12 +34,12 @@ def tts_f5_single_tab(user_config: UserConfig):
                 celeb_audio = gr.Audio(label="Reference Audio", sources=['upload', 'microphone'], type="filepath", interactive=True)
                 celeb_transcript = gr.Textbox(label=i18n("Transcript"), interactive=True, max_lines=12, lines=6,
                                               placeholder=i18n("Optional"))
-                celeb_image = gr.Image(label="Photo", type="filepath", interactive=False, show_download_button=False)                                              
+                celeb_image = gr.Image(label="Photo", type="filepath", interactive=False)                                              
         with gr.Column(scale=8):
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Script")}</h4></center>')     
                 dubbing_file_in = gr.File(label=i18n("Subtitle File"), type="filepath", file_count="single", file_types=subtitle_exts)
-                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                 placeholder=i18n("Placeholder for Source Text"), lines=5)
             with gr.Group():
                 gr.HTML(f'<center><h4>{i18n("Synthesized voice")}</h4></center>')

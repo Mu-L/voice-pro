@@ -47,12 +47,12 @@ def live_translate_tab(user_config: UserConfig):
                 with gr.Group():
                     gr.HTML(f'<center><h4>{i18n("Live Transcriptions")}</h4></center>')
                     source_vtt = gr.Textbox(label=i18n("Live Transcriptions"), interactive=False, show_label=True,
-                                        value=live.get_transcriptions(), every=0.5, max_lines=34, show_copy_button=True,
+                                        value=live.get_transcriptions(), every=0.5, max_lines=34, buttons=["copy"],
                                         placeholder=i18n("Placeholder for Source VTT"), lines=10)
                 with gr.Group():
                     gr.HTML(f'<center><h4>{i18n("Live Translations")}</h4></center>')
                     target_vtt = gr.Textbox(label=i18n("Live Translations"), interactive=False, show_label=True,
-                                        value=live.get_translations(), every=0.5, max_lines=34, show_copy_button=True,
+                                        value=live.get_translations(), every=0.5, max_lines=34, buttons=["copy"],
                                         lines=10)
                 
             with gr.Row():

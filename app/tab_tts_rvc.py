@@ -29,7 +29,7 @@ def tts_rvc_tab(user_config: UserConfig):
                         gr.HTML(f'<center><h4>{i18n("Upload subtitle")}</h4></center>')
                         # gr.HTML(f'<center><h6>{i18n("Formats")}: {i18n("ass, ssa, srt, mpl2, tmp, vtt, microdvd, json")}</h6></center>')                        
                         dubbing_file_in = gr.File(label=i18n("Subtitle File"), type="filepath", file_count="single", file_types=subtitle_exts) 
-                        dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, show_copy_button=True,
+                        dubbing_text_in = gr.Textbox(label=i18n("Source Text"), interactive=True, show_label=True, max_lines=24, buttons=["copy"],
                                                      placeholder=i18n("Placeholder for Source Text"), lines=5)   
                 with gr.Column():
                     with gr.Group():

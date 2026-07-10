@@ -69,7 +69,7 @@ class GradioEdgeTTS:
                 return None, None            
         except Exception as e:
             logger.error(f"[gradio_tts_edge.py] gradio_tts_dubbing - error: {e}")
-            gr.Warning(f'{e}')
+            raise gr.Error(f'{e}', duration=None)
             return None, None  
     
     def gradio_save(self, file_obj, target_lang, audio_format, text, audio_obj):
