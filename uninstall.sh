@@ -25,6 +25,7 @@ fi
 # Terminate running Python processes (if any)
 echo "Terminating running Python processes..."
 pkill -f "python.*start-abus.py" || true
+pkill -f "python.*start-voice.py" || true
 sleep 2
 
 # Ask about system packages

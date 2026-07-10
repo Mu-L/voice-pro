@@ -22,12 +22,29 @@ if /i "%~dp0"=="%SystemRoot%\SysWOW64\" (
 
 
 
-:: run as admin
-if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
+:: run as admin (needed for choco installs and the LongPathsEnabled registry key)
+net session >nul 2>&1
+if errorlevel 1 (
+    if "%1"=="am_admin" (
+        echo This script requires administrator rights.
+        echo Please right-click configure.bat and select "Run as administrator".
+        pause
+        exit /b 1
+    )
+    :: try self-elevation via PowerShell; on machines where PowerShell is blocked
+    :: by group policy this fails, so fall through with a clear message
+    powershell -NoProfile start -verb runas '%0' am_admin >nul 2>&1
+    if errorlevel 1 (
+        echo This script requires administrator rights, and automatic elevation failed.
+        echo Please right-click configure.bat and select "Run as administrator".
+        pause
+    )
+    exit /b
+)
 
 echo =========================================================================
 echo.
-echo   ABUS Configure [Version 3.0]
+echo   ABUS Configure [Version 4.0 - uv]
 echo   contact: abus.aikorea@gmail.com
 echo.
 echo =========================================================================
@@ -81,11 +98,13 @@ if %errorlevel% neq 0 (
     echo Chocolatey is already installed.
 )
 
-:: Install uv
-@REM %CHOCPATH% -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+:: NOTE (v4.0, uv-based install):
+:: - CUDA Toolkit is no longer required: PyTorch cu128 wheels bundle the CUDA
+::   runtime and cuDNN. Only an NVIDIA driver (>= 525, recommended >= 570) is needed.
+:: - Visual Studio Build Tools are no longer required: every Python dependency
+::   now ships prebuilt wheels.
 
-
-:: check NVIDIA GPU
+:: check NVIDIA GPU (informational only)
 set IS_NVIDIA_GPU=0
 set "registry_path=HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
 set "search_key=DriverDesc"
@@ -98,47 +117,10 @@ if not "!value!"=="" (
     set "substring=nvidia"
     echo "!value!" | findstr /I /C:"!substring!" >nul 2>&1
     if !errorlevel! equ 0 (
-        echo NVIDIA
+        echo NVIDIA GPU detected. CUDA Toolkit installation is NOT required:
+        echo PyTorch wheels bundle the CUDA runtime. Just keep your NVIDIA driver up to date.
         set IS_NVIDIA_GPU=1
-    ) else (
-        set "substring=tesla"
-        echo "!value!" | findstr /I /C:"!substring!" >nul 2>&1
-        if !errorlevel! equ 0 (
-            echo TESLA
-            set IS_NVIDIA_GPU=1
-        )
     )
-)
-
-:: install CUDA
-if !IS_NVIDIA_GPU! equ 1 (
-    echo.
-    echo =========================================================================
-    echo NVIDIA GPU detected - Installing CUDA
-    echo =========================================================================
-    echo.
-    echo CUDA 12.3.2 requires NVIDIA driver version 525.60.13 or higher.
-    echo If installation fails, please update your NVIDIA driver first.
-    echo.
-    @REM choco install -y cuda --version=11.8.0.52206
-    choco install -y cuda --version=12.3.2.546
-    if %errorlevel% neq 0 (
-        echo.
-        echo WARNING: CUDA installation failed.
-        echo Possible reasons:
-        echo 1. NVIDIA driver version is too old
-        echo 2. Another CUDA version is already installed
-        echo 3. Insufficient disk space
-        echo.
-        echo Continuing with other installations...
-        echo.
-    ) else (
-        echo CUDA installed successfully.
-    )
-) else (
-    echo NVIDIA or TESLA GPU is not found
-    echo Skipping CUDA installation.
-    echo.
 )
 
 echo.
@@ -158,21 +140,6 @@ echo Installing ffmpeg...
 choco install -y ffmpeg
 if %errorlevel% neq 0 (
     echo WARNING: ffmpeg installation failed.
-)
-
-echo.
-echo Installing Visual Studio 2022 Build Tools...
-echo This may take a very long time (30+ minutes)...
-choco install -y visualstudio2022buildtools --verbose
-if %errorlevel% neq 0 (
-    echo WARNING: visualstudio2022buildtools installation failed.
-)
-
-echo.
-echo Installing Visual Studio 2022 C++ workload...
-choco install -y visualstudio2022-workload-vctools --verbose
-if %errorlevel% neq 0 (
-    echo WARNING: visualstudio2022-workload-vctools installation failed.
 )
 
 echo.

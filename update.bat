@@ -24,138 +24,85 @@ if /i "%~dp0"=="%SystemRoot%\SysWOW64\" (
 
 echo =========================================================================
 echo.
-echo   ABUS Updater [Version 3.0]
+echo   ABUS Updater [Version 4.0 - uv]
 echo   contact: abus.aikorea@gmail.com
 echo.
 echo =========================================================================
 echo.
 
-:: If we've reached here, we're running in the correct environment
-:: Your actual batch file commands start here
-echo Running in 64-bit mode from System32
-echo Current directory: %CD%
-echo Command line: %*
-
-
 cd /D "%~dp0"
 set PATH=%PATH%;%SystemRoot%\system32
-echo "%CD%"| findstr /C:" " >nul && echo This script relies on Miniconda which can not be silently installed under a path with spaces. && goto end
-
-
-:: Check for special characters in installation path
-set "SPCHARMESSAGE="WARNING: Special characters were detected in the installation path!" "         This can cause the installation to fail!""
-echo "%CD%"| findstr /R /C:"[!#\$%&()\*+,;<=>?@\[\]\^`{|}~]" >nul && (
-	call :PrintBigMessage %SPCHARMESSAGE%
-)
-set SPCHARMESSAGE=
 
 
 :: fix failed install when installing to a separate drive
 set TMP=%cd%\installer_files
 set TEMP=%cd%\installer_files
 
-:: deactivate existing conda envs as needed to avoid conflicts
-(call conda deactivate && call conda deactivate && call conda deactivate) 2>nul
-
 
 :: config
 set INSTALL_DIR=%cd%\installer_files
-set CONDA_ROOT_PREFIX=%cd%\installer_files\conda
 set INSTALL_ENV_DIR=%cd%\installer_files\env
+set UV_VERSION=0.11.28
+set UV_DIR=%INSTALL_DIR%\uv
+set UV_EXE=%UV_DIR%\uv.exe
 
-
-:: ABUS miniconda fo python 3.10
-set MINICONDA_DOWNLOAD_URL=https://repo.anaconda.com/miniconda/Miniconda3-py310_24.5.0-0-Windows-x86_64.exe
-set MINICONDA_CHECKSUM=978114c55284286957be2341ad0090eb5287222183e895bab437c4d1041a0284
-set conda_exists=F
-
-
-:: figure out whether git and conda needs to be installed
-call "%CONDA_ROOT_PREFIX%\_conda.exe" --version >nul 2>&1
-if "%ERRORLEVEL%" EQU "0" set conda_exists=T
-
-
-:: (if necessary) install git and conda into a contained environment
-:: download conda
-if "%conda_exists%" == "F" (
-	echo Downloading Miniconda from %MINICONDA_DOWNLOAD_URL% to %INSTALL_DIR%\miniconda_installer.exe
-
-	mkdir "%INSTALL_DIR%"
-	call curl -Lk "%MINICONDA_DOWNLOAD_URL%" > "%INSTALL_DIR%\miniconda_installer.exe" || ( echo. && echo Miniconda failed to download. && goto end )
-
-	for /f %%a in ('CertUtil -hashfile "%INSTALL_DIR%\miniconda_installer.exe" SHA256 ^| find /i /v " " ^| find /i "%MINICONDA_CHECKSUM%"') do (
-		set "output=%%a"
-	)
-
-	if not defined output (
-		echo The checksum verification for miniconda_installer.exe has failed.
-		del "%INSTALL_DIR%\miniconda_installer.exe"
-		goto end
-	) else (
-		echo The checksum verification for miniconda_installer.exe has passed successfully.
-	)
-
-	echo Installing Miniconda to %CONDA_ROOT_PREFIX%
-	start /wait "" "%INSTALL_DIR%\miniconda_installer.exe" /InstallationType=JustMe /NoShortcuts=1 /AddToPath=0 /RegisterPython=0 /NoRegistry=1 /S /D=%CONDA_ROOT_PREFIX%
-
-	:: test the conda binary
-	echo Miniconda version:
-	call "%CONDA_ROOT_PREFIX%\_conda.exe" --version || ( echo. && echo Miniconda not found. && goto end )
-
-	:: delete the Miniconda installer
-	del "%INSTALL_DIR%\miniconda_installer.exe"
-)
-
-
-:: ABUS python 3.10 - create the installer env
-set abus_genuine_installed=T
-if not exist "%INSTALL_ENV_DIR%" (
-	set abus_genuine_installed=F
-	echo Packages to install: %PACKAGES_TO_INSTALL%
-	call "%CONDA_ROOT_PREFIX%\_conda.exe" create --no-shortcuts -y -k --prefix "%INSTALL_ENV_DIR%" python=3.10 || ( echo. && echo Conda environment creation failed. && goto end )
-)
-
-
-
-:: check if conda environment was actually created
-if not exist "%INSTALL_ENV_DIR%\python.exe" ( echo. && echo Conda environment is empty. && goto end )
-
+:: keep everything project-local (no global uv/python/cache pollution)
+set UV_PYTHON_INSTALL_DIR=%INSTALL_DIR%\python
+set UV_CACHE_DIR=%INSTALL_DIR%\uv-cache
+set UV_PROJECT_ENVIRONMENT=%INSTALL_ENV_DIR%
 
 :: environment isolation
 set PYTHONNOUSERSITE=1
 set PYTHONPATH=
 set PYTHONHOME=
-set "CUDA_PATH=%INSTALL_ENV_DIR%"
-set "CUDA_HOME=%CUDA_PATH%"
-
-:: activate installer env
-call "%CONDA_ROOT_PREFIX%\condabin\conda.bat" activate "%INSTALL_ENV_DIR%" || ( echo. && echo Miniconda hook not found. && goto end )
 
 
-:: setup installer env
-echo Miniconda location: %CONDA_ROOT_PREFIX%
-cd /D "%~dp0"
-if "%abus_genuine_installed%" == "F" (
-	call python -m pip install huggingface-hub==0.27.1
+:: (if necessary) download uv into a contained folder
+:: NOTE: extraction must use the built-in bsdtar with its full path. A bare `tar` may
+:: resolve to GNU tar from Git which cannot read zip files, and PowerShell
+:: Expand-Archive may be blocked by group policy on corporate machines.
+if not exist "%UV_EXE%" (
+	echo Downloading uv %UV_VERSION% to %UV_DIR%
+	mkdir "%UV_DIR%" 2>nul
+	call curl -Lk "https://github.com/astral-sh/uv/releases/download/%UV_VERSION%/uv-x86_64-pc-windows-msvc.zip" -o "%INSTALL_DIR%\uv.zip" || ( echo. && echo uv failed to download. && goto end )
+	"%SystemRoot%\System32\tar.exe" -xf "%INSTALL_DIR%\uv.zip" -C "%UV_DIR%" || ( echo. && echo uv failed to extract. && goto end )
+	del "%INSTALL_DIR%\uv.zip"
 )
 
 
-set LOG_LEVEL=DEBUG
-call python start-abus.py voice --update
-echo Pip update process completed.
+:: figure out the GPU choice: GPU_CHOICE env var > saved choice > NVIDIA registry autodetect
+set SAVED_CHOICE_FILE=%INSTALL_DIR%\gpu_choice.txt
+if not defined GPU_CHOICE (
+	if exist "%SAVED_CHOICE_FILE%" (
+		set /p GPU_CHOICE=<"%SAVED_CHOICE_FILE%"
+	)
+)
+if not defined GPU_CHOICE (
+	set GPU_CHOICE=C
+	set "registry_path=HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000"
+	for /f "tokens=2*" %%a in ('reg query "!registry_path!" /v "DriverDesc" 2^>nul ^| findstr /i /c:"DriverDesc"') do (
+		set "value=%%b"
+	)
+	if not "!value!"=="" (
+		echo "!value!" | findstr /I /C:"nvidia" >nul 2>&1 && set GPU_CHOICE=G
+		echo "!value!" | findstr /I /C:"tesla" >nul 2>&1 && set GPU_CHOICE=G
+	)
+)
+echo !GPU_CHOICE!>"%SAVED_CHOICE_FILE%"
+
+if /i "!GPU_CHOICE!"=="G" (
+	set SYNC_EXTRA=gpu
+) else (
+	set SYNC_EXTRA=cpu
+)
+echo Updating environment (extra: !SYNC_EXTRA!) from uv.lock ...
+
+
+:: update the environment to exactly match the committed lockfile
+call "%UV_EXE%" sync --frozen --extra !SYNC_EXTRA! || ( echo. && echo Environment update failed. && goto end )
+
 echo.
-
-:: below are functions for the script   next line skips these during normal execution
-goto end
-
-
-:PrintBigMessage
-echo. && echo.
-echo *******************************************************************
-for %%M in (%*) do echo * %%~M
-echo *******************************************************************
-echo. && echo.
-exit /b
+echo Update finished successfully.
 
 :end
 pause

@@ -22,12 +22,12 @@ if /i "%~dp0"=="%SystemRoot%\SysWOW64\" (
 
 
 
-@REM run as admin
-if not "%1"=="am_admin" (powershell start -verb runas '%0' am_admin & exit /b)
+:: NOTE (v4.0): admin elevation is no longer required - deleting installer_files
+:: needs no special rights. Only the optional system-package removal (choco) does.
 
 echo =========================================================================
 echo.
-echo   ABUS Uninstaller [Version 3.0]
+echo   ABUS Uninstaller [Version 4.0 - uv]
 echo   contact: abus.aikorea@gmail.com
 echo.
 echo =========================================================================
@@ -43,32 +43,40 @@ echo Command line: %*
 cd /D "%~dp0"
 
 
+:: "uninstall.bat silent" skips the prompts (terminate=yes, remove system packages=no)
+set SILENT=0
+if /i "%1"=="silent" set SILENT=1
+
+
 :: quit task
-choice /C YN /N /T 10 /D Y /M "Terminate all running python.exe. Do you want to continue (Y/N)?"
-if errorlevel 2 (
-    echo.
-    echo Quit Uninstallation. 
-    pause
-    exit 0
+if "%SILENT%"=="0" (
+    choice /C YN /N /T 10 /D Y /M "Terminate all running python.exe. Do you want to continue (Y/N)?"
+    if errorlevel 2 (
+        echo.
+        echo Quit Uninstallation.
+        pause
+        exit 0
+    )
 )
 taskkill /f /im python.exe /t
 echo.
 
 
-echo.
-choice /C NY /N /T 10 /D N /M "Would you like to remove system packages (not recommended) (N/Y)?"
-if errorlevel 2 (
+if "%SILENT%"=="0" (
     echo.
-    echo Start Uninstallation. 
-
-    :: Uninstall packages
-    choco uninstall -y git.install
-    choco uninstall -y ffmpeg
-    @REM choco uninstall -y cuda --version=11.8.0.52206
-    @REM choco uninstall -y cuda --version=12.3.2.546
-    choco uninstall -y cuda
-    choco uninstall -y visualstudio2022-workload-vctools
-    choco uninstall -y visualstudio2022buildtools
+    choice /C NY /N /T 10 /D N /M "Would you like to remove system packages (not recommended, requires administrator) (N/Y)?"
+    if errorlevel 2 (
+        echo.
+        net session >nul 2>&1
+        if errorlevel 1 (
+            echo Removing system packages requires administrator rights.
+            echo Please run uninstall.bat again as administrator to remove them.
+        ) else (
+            echo Removing system packages ...
+            choco uninstall -y git.install
+            choco uninstall -y ffmpeg
+        )
+    )
 )
 
 
@@ -79,15 +87,8 @@ if exist "%~dp0\installer_files\" (
 
     rmdir /s /q "%~dp0\installer_files"
 ) 
+echo.
 echo ABUS uninstall.bat finished.
-pause
-
-:: Rebooting
-for /l %%i in (30,-1,1) do (
-    cls
-    echo.    
-    echo ABUS Uninstaller finished.
-    echo System will be rebooted in %%i seconds.
-    timeout /t 1 /nobreak >nul
-)
-shutdown /r /t 0
+echo Note: the application folder itself was not deleted.
+echo To completely remove Voice-Pro, delete this entire folder.
+if "%SILENT%"=="0" pause
